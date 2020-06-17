@@ -11,6 +11,7 @@
 
 library(tidyr)
 library(ggplot2)
+library(scales)
 library(data.table)
 
 ###############################################
@@ -75,10 +76,9 @@ return(Plot)
 Tungstify <- function(Tungstate.Graph){
   
 Plot <-  Tungstate.Graph +
-  scale_color_manual(values = c("#6d6d6dff", "#7900f5ff")) +
+  scale_color_manual(values = c("#494949ff", "#7900f5ff")) +
   theme_classic() +
-  theme(text = element_text(size=20), axis.text.x = element_text(size = 20, color = "black", 
-                                                                 margin = margin(t=0, r=0, l=0, b=5)), axis.text.y = element_text(size = 20, color = "black",  margin = margin(t=0, r=0, l=5, b=0))) 
+  theme(text = element_text(size=15))
   
 return(Plot)  
 }
@@ -92,18 +92,20 @@ return(Plot)
 # The OG function to plot a singular boxplot showing one aspect of your FACS Data
 ############################################
 
-FACSPlotter <- function(FACS.data, x.axis, y.axis, colour.by, colour.by.title = "Condition", x.title = "Day", y.title = "FOXP3 T Cells (%)", legend.position = "right", facet = FALSE, facet.by = "none"){
+FACSPlotter <- function(FACS.data, x.axis, y.axis, colour.by, colour.by.title = "Condition", x.title = "Day", y.title = "FOXP3 T Cells (%)", legend.position = "right", facet = NULL, xblank = FALSE, y.log = FALSE){
   Plot <- ggplot(FACS.data, aes_string(x = x.axis, y = y.axis, color = colour.by)) +
     geom_boxplot(outlier.alpha = 0) +
     geom_point(position = position_jitterdodge(jitter.height = 0, jitter.width = 0.1), alpha = 0.5) +
-    scale_color_manual(values = c("#6d6d6dff", "#7900f5ff"), name = colour.by.title) +
+    scale_color_manual(values = c("#494949ff", "#7900f5ff"), name = colour.by.title) +
     theme_classic() +
-    theme(legend.position = legend.position, text = element_text(size=20), axis.text.x = element_text(size = 20, color = "black", 
-                                                                   margin = margin(t=0, r=0, l=0, b=5)), axis.text.y = element_text(size = 20, color = "black",  margin = margin(t=0, r=0, l=5, b=0))) +
+    theme(legend.position = legend.position, text = element_text(size=15)) +
     labs(x = x.title, y = y.title) + 
-    expand_limits(y = 0)  #Makes sure each graph starts from 0
+    scale_y_continuous(expand = expand_scale(mult = c(0, 0.2))) + #add white space to the top of graphs for stats :)
+    expand_limits(y = 0) #Makes sure each graph starts from 0
   
-  if(facet == TRUE){Plot <- Plot + facet_wrap(facet.by)}
+  if(xblank == TRUE){Plot <- Plot + theme(legend.position = legend.position, text = element_text(size=15), axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank())}
+  if(!is.null(facet)){Plot <- Plot + facet_wrap(facet, scales = "free")}
+  if(y.log == TRUE){Plot <- Plot +  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x), labels=trans_format("log10", math_format(10^.x)), expand = expand_scale(mult = c(0.05, 0.1)))}
  
   return(Plot)
   
@@ -122,16 +124,16 @@ FACSPlotter <- function(FACS.data, x.axis, y.axis, colour.by, colour.by.title = 
 #############################################
 
 FACSPlotterXtreme <- function(FACS.data, x.axis, y.axis.as.list, colour.by, 
-                              colour.by.title = "Condition", x.title = "Day", y.title.as.list = y.titles.as.list,
+                              colour.by.title = "Condition", x.title = "Day", y.title.as.list,
                               legend.position = "right", 
-                              file.name = "Spleen", file.width = 18.5, file.height = 16, save = FALSE, facet = FALSE, facet.by = "none"){
+                              file.name = "Spleen", file.width = 18.5, file.height = 16, save = FALSE, facet = NULL, xblank = FALSE, y.log = FALSE){
   
   plot_list = list()
   var_list = list(cell_plot = y.axis.as.list, 
                   y_label = y.title.as.list)
   for (i in 1:length(var_list$cell_plot)){
     
-    Plot <- FACSPlotter(FACS.data, x.axis, var_list$cell_plot[i], colour.by, colour.by.title = colour.by.title, y.title = var_list$y_label[i], x.title = x.title, legend.position = legend.position, facet = facet, facet.by = facet.by)
+    Plot <- FACSPlotter(FACS.data, x.axis, var_list$cell_plot[i], colour.by, colour.by.title = colour.by.title, y.title = var_list$y_label[i], x.title = x.title, legend.position = legend.position, facet = facet, xblank=xblank, y.log = y.log)
       plot_list[[i]] = Plot
       if(save == TRUE){ggsave(Plot, file=paste0(file.name, var_list$cell_plot[i], ".png"), width = file.width, height = file.height, units = "cm")}
   }

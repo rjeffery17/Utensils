@@ -3,10 +3,11 @@ library(DESeq2)
 
 #######################################
 #######################################
+# CalcAbun
 #######################################
-#Calculate abundance from count data
-#NB/ gene name or w/e cannot be a column in count.matrix
-#Import files with row.names = 1
+# Calculate abundance from count data
+# NB/ gene name or w/e cannot be a column in count.matrix
+# Import files with row.names = 1
 
 CalcAbun <- function(count.matrix){
 
@@ -17,9 +18,14 @@ return(Abun_Matrix)
 
 ######################################
 ######################################
+# AddDescript
+######################################
 # Add readable descriptions to things of interest e.g. multiple KEGGs grouped by function
 # Need $Description in TOI data - filled with NAs
 # TOI.group = list of TOI names which can be grouped under one description
+######################################
+# Redundant - use DESCRIPTOR2000
+######################################
 
 AddDescript <- function(TOIs.data, TOI.group, description="tup"){
 
@@ -27,10 +33,12 @@ AddDescript <- function(TOIs.data, TOI.group, description="tup"){
   return(TOIs.data)
 }
 
-
 #######################################
+#######################################
+# FACSSprucer
 #######################################
 #Import, remove mean and SD and % signs from raw flowjo export files
+#######################################
 
 FACSSprucer <- function(path.to.file, sample.number = 10, conditions = Conditions, days = Days, tissue = Tissue){
   Data <- read.csv(path.to.file, stringsAsFactors = FALSE, row.names = 1)
@@ -53,9 +61,10 @@ FACSSprucer <- function(path.to.file, sample.number = 10, conditions = Condition
 
 ########################################
 ########################################
-#TOIbySpecies
+# TOIbySpecies
 ########################################
 # Create table showing TOI abundance over time with species contribution to TOI
+#########################################
 
 TOIbySpecies <- function(path.to.TOI.file, path.to.TOI.by.species.file, metadata, total.row.means = TRUE, total.row.means.alternative = 1:24,
                          group.1.name = "Condition", group.2 = TRUE, group.2.name = "Day", group.3 = TRUE, group.3.name = "Mouse"){
@@ -94,51 +103,52 @@ TOIbySpecies <- function(path.to.TOI.file, path.to.TOI.by.species.file, metadata
 }
 
 ###############################
+###############################
 ## Multi-Omic Longituinal DESEq
 ###############################
 # Run DESeq on TOI data from two different time points on two different omic datasets
+###############################
 
 
-LongDESeq <- function(DNA.metadata, RNA.metadata, day.1, day.2, DNA.count.data, RNA.count.data){
-  DNA_metadata <- DNA.metadata[DNA.metadata$Day %in% c(day.1, day.2),]
-  RNA_metadata <- RNA.metadata[RNA.metadata$Day %in% c(day.1, day.2),]
-  DNA_count_data <- DNA.count.data[, rownames(DNA_metadata)]
-  RNA_count_data <- RNA.count.data[,rownames(RNA_metadata)]
+LongDESeq <- function(RNA_MetaData, RNA_KEGG, DNA_MetaData, DNA_KEGG, day.1, day.2){
   
-  # Do the DDS for DNA
-  DNA_metadata$Day <- factor(DNA_metadata$Day)
-  DNA_metadata$Mouse <- factor(DNA_metadata$Mouse)
-  DNA_count_data_dds <- DESeqDataSetFromMatrix(countData = DNA_count_data,
-                                           colData = DNA_metadata, 
-                                           design = ~ Mouse + Day)
   
-  DNA_count_data_dds$Day <- relevel(DNA_count_data_dds$Day, ref = "-3")
+  RNA_MetaData <- RNA_MetaData[RNA_MetaData$Day %in% c(day.1, day.2),]
+  DNA_MetaData <- DNA_MetaData[DNA_MetaData$Day %in% c(day.1, day.2),]
+  RNA_KEGG <- RNA_KEGG[, rownames(RNA_MetaData)]
+  DNA_KEGG <- DNA_KEGG[, rownames(DNA_MetaData)]
   
-  DNA_count_data_dds <- DESeq(DNA_count_data_dds, test = "LRT", fitType = "local", reduced = ~ Mouse)
-  DNA_dds_results <- results(DNA_count_data_dds) 
- 
-  #Same for RNA
-  RNA_metadata$Day <- factor(RNA_metadata$Day)
-  RNA_metadata$Mouse <- factor(RNA_metadata$Mouse)
-  RNA_count_data_dds <- DESeqDataSetFromMatrix(countData = RNA_count_data,
-                                               colData = RNA_metadata, 
-                                               design = ~ Mouse + Day)
   
-  RNA_count_data_dds$Day <- relevel(RNA_count_data_dds$Day, ref = "-3")
+  RNA_MetaData$Day <- as.factor(RNA_MetaData$Day)
+  DNA_MetaData$Day <- as.factor(DNA_MetaData$Day)
   
-  RNA_count_data_dds <- DESeq(RNA_count_data_dds, test = "LRT", fitType = "local", reduced = ~ Mouse)
-  RNA_dds_results <- results(RNA_count_data_dds) 
+  RNAKEGG.dds <- DESeqDataSetFromMatrix(countData = RNA_KEGG,
+                                        colData = RNA_MetaData, 
+                                        design = ~ Mouse + Day)
   
-  RNA_DNAK <- data.frame(Gene=rownames(DNA_count_data), RNA_FC=RNA_dds_results$log2FoldChange, DNA_FC=DNA_dds_results$log2FoldChange, RNA_padj=RNA_dds_results$padj, DNA_padj=DNA_dds_results$padj)
+  DNAKEGG.dds <- DESeqDataSetFromMatrix(countData = DNA_KEGG,
+                                        colData = DNA_MetaData, 
+                                        design = ~ Mouse + Day)
   
+  RNAKEGG.dds$Day <- relevel(RNAKEGG.dds$Day, ref = "-3")
+  DNAKEGG.dds$Day <- relevel(DNAKEGG.dds$Day, ref = "-3")
+  
+  RNAKEGG.dds <- DESeq(RNAKEGG.dds, test = "LRT", fitType = "local", reduced = ~Mouse) 
+  DNAKEGG.dds <- DESeq(DNAKEGG.dds, test = "LRT", fitType = "local", reduced = ~Mouse) 
+  
+  RNAKEGG.res <- results(RNAKEGG.dds)
+  DNAKEGG.res <- results(DNAKEGG.dds)
+  RNA_DNAK <- data.frame(Gene=rownames(RNA_KEGG), RNA_FC=RNAKEGG.res$log2FoldChange, DNA_FC=DNAKEGG.res$log2FoldChange, RNA_padj=RNAKEGG.res$padj, DNA_padj=DNAKEGG.res$padj)
   return(RNA_DNAK)
-  
 }
 
 ################################
 ################################
 #### Gene Plucker
 ################################
+# Pluck out multiple genes with a common signature e.g. nap will return napA, napB etc.
+################################
+
 GenePlucker <- function(Gene_List, DF, variable = "Gene"){
   #Create an empty vector to store results
   res <- c()
@@ -162,6 +172,37 @@ TOIPluckerXtreme <- function(TOI.list, df, TOI.variable.name.in.df){
 }
 
 ################################
+################################
+# DESCRIPTOR2000
+################################
+# Adds descriptions based on a list where the key is the readable decription 
+# name and the values are the things to assign to that description
+################################
 
+DESCRIPTOR2000 <- function(descriptions, data.table){
+  data.table$Description <- rep(NA, nrow(data.table))
+  for(i in 1:length(descriptions)){
+    data.table$Description <- ifelse(data.table$Gene %in% descriptions[[i]], names(descriptions)[i], data.table$Description)
+  } 
+  return(data.table)
+}
+
+################################
+################################
+# fancy_scientific
+################################
+# Scientific labelling of log axis
+###############################
+
+fancy_scientific <- function(l) {
+  # turn in to character string in scientific notation
+  l <- format(l, scientific = TRUE)
+  # quote the part before the exponent to keep all the digits
+  l <- gsub("^(.*)e", "'\\1'e", l)
+  # turn the 'e+' into plotmath format
+  l <- gsub("e", "%*%10^", l)
+  # return this as an expression
+  parse(text=l)
+}
 
 
