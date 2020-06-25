@@ -1,1 +1,1 @@
-Repository for: i) python scripts used for small taks surrounding the processing of 16S sequencing data; and ii) functions used in R for manipulation, plotting and statistical analysis of FACS and 16S data
+Repository for: i) python scripts used for small tasks surrounding the processing of 16S sequencing data; and ii) functions used in R for manipulation, plotting and statistical analysis of FACS and 16S data
