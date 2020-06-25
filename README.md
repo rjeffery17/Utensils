@@ -1,1 +1,1 @@
-This is a repository for R stuff and FileShuttle.py (and more to come - this is just the beginning).
+Repository for: i) python scripts used for small taks surrounding the processing of 16S sequencing data; and ii) functions used in R for manipulation, plotting and statistical analysis of FACS and 16S data
