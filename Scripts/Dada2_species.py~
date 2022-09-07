@@ -1,0 +1,115 @@
+'''
+Dada2_species.py
+=================
+
+:Author: Rebecca
+:Tags: Python
+
+Purpose
+-------
+
+Format Plucked 16S data for Species Assignment
+
+
+Usage
+-----
+
+
+
+
+Example::
+
+python /gfs/devel/rjeffery/Dada2_species.py --Infile=/gfs/work/rjeffery/filtered_16S.fa --Outfile=/gfs/work/rjeffery/filtered_16S_species_formatted.fa --Log=format.log   
+
+Type::
+
+   python GenomePlucker.py --help
+
+for command line help.
+
+Command line options
+--------------------
+
+'''
+
+
+import glob
+import os
+import sys
+import cgatcore.experiment as E
+
+###############################################
+###############################################
+###############################################
+###############################################     
+###### Open Bacteria of interest file,
+### iterate through dada2 database and take out
+# sequences based on bacteria of interest
+
+import cgatcore.iotools as iotools
+import cgat.FastaIterator as fastaiterator
+
+def specformatter(Infile, Outfile):
+    
+    infile = iotools.open_file(Infile)
+    fastas = fastaiterator.iterate(infile)
+    outfile = open(Outfile, "w")
+
+    for fasta in fastas:
+        name = fasta.title.split(";")[6]
+        specID = name.split("(")[1]
+        specID = specID[:-1]
+        genusspecies = name.split("(")[0]
+        genus = genusspecies.split("_")[0]
+        species = genusspecies.split("_")[1]
+        newtitle = " ".join([specID, genus, species])
+        outfile.write(">" + newtitle + "\n" + fasta.sequence + "\n")
+        
+            
+################################################
+################################################
+################################################
+### Give the command line arguments which ######
+######## feed into function execution ##########
+################################################
+################################################
+################################################
+            
+def main(argv=None):
+    """script main.
+    parses command line options in sys.argv, unless *argv* is given.
+    """
+
+    if argv is None:
+        argv = sys.argv
+
+    # setup command line parser
+    parser = E.ArgumentParser(description=__doc__)
+
+    parser.add_argument("--Infile", dest="Infile", type=str,
+                        help= "Supply file containing filtered 16S fasta file")
+
+    parser.add_argument("--Outfile", dest="Outfile", type=str,
+                        help= "Supply desired outfile name")
+
+    
+    # add common options (-h/--help, ...) and parse command line
+    (args) = E.start(parser, argv=argv)
+
+    ###############################################
+    ###############################################
+    ############## Execute Functions ##############
+    ###############################################
+    ###############################################
+
+
+    specformatter(args.Infile, args.Outfile)
+     
+    
+    # write footer and output benchmark information.
+    E.stop()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+       

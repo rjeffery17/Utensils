@@ -10,7 +10,7 @@ library(dplyr)
 
 
 organiser <- function(df, desired.rows, desired.cols, df.order, metadata, v1=NULL, 
-                      v2=NULL, V3=NULL){
+                      v2=NULL, v3=NULL){
   
  
   sample.names <- data.frame(SampleID = rownames(df)[desired.rows])
@@ -136,10 +136,10 @@ wil.test <- function(col, metadata, independent.variable){
 
 ########### Run over a data frame by column
 
-run.wil.test <- function(df, subset=NULL, subsetcol, metadata, independent.variable, testnum){
+run.wil.test <- function(df, subset=NULL, subsetcol, metadata, independent.variable, col4test){
   if (!(is.null(subset))){ metadata <- metadata[metadata[, subsetcol] == subset, ]}
   df <- df[rownames(df) %in% rownames(metadata),]
-  df <- df[,1:testnum]
+  df <- df[,col4test]
   wil.results = list()
   for(i in 1:ncol(df)){
     result <- wil.test(df[,i], metadata, independent.variable)

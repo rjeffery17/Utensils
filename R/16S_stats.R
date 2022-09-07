@@ -38,7 +38,7 @@ genus.name <- function(df, split.point = "g__"){
   
   bug.names <- unlist(strsplit(row.names(df), split.point))
   bug.names <- bug.names[seq(2, length(bug.names), 2)]
-  bug.names <- gsub(" incertae sedis", "", bug.names)
+ # bug.names <- gsub(" incertae sedis", "", bug.names)
   return(bug.names)
   
 }
@@ -151,7 +151,7 @@ starry.eyed <- function(df){
 ### NB metadata must have rownames matching counts colnames
 
 lmr.emeans <- function(row, metadata, independent.variable="Condition", sample.variable="SampleID", time.variable="Day", 
-                       emeans.factor, emeans.by.factor){
+                       emeans.factor, emeans.by.factor, baseline.comparison = NULL){
   
   bug.name <- rownames(row)
   bug.df <- data.frame(Sample=names(row), Rel_Abun=unlist(row))
@@ -176,20 +176,26 @@ lmr.emeans <- function(row, metadata, independent.variable="Condition", sample.v
   # Anova on lmr
   summary <- anova(lmr.res)
   anova.res <- t(data.frame(summary$P))
+  anova.res2 <- t(data.frame(summary$F))
+  anova.res <- cbind(anova.res, anova.res2)
   rownames(anova.res) <- bug.name
-  colnames(anova.res) <- c(independent.variable, time.variable, paste0(independent.variable, "*" ,time.variable))
+  colnames(anova.res) <- c(paste0("P_", independent.variable), paste0("P_", time.variable), paste0("P_", independent.variable, "*" ,time.variable), paste0("F_", independent.variable), paste0("F_", time.variable), paste0("F_", independent.variable, "*" ,time.variable))
   anova.res <- as.data.frame(anova.res)
   
   # Pairwise on lmr
   emmeans.res <- emmeans(lmr.res, emeans.factor, by = emeans.by.factor)
-  results <- pairs(emmeans.res)
+  results <- pairs(emmeans.res, adjust = "none")
   results <- data.frame(results)
+  if(!is.null(baseline.comparison)){results <- results[grep(paste0(baseline.comparison, " -"), results$contrast),]}
+  results$padj <- p.adjust(results$p.value, method = "BH")
+  results$padj.star <- stars.pval(results$padj)
+  results$Bug <- rep(bug.name, nrow(results))
 
   
-  bacteria <- data.frame(Bacteria = rep(bug.name, nrow(results)))
-  test.complete <- cbind(bacteria, results)
+  #bacteria <- data.frame(Bacteria = rep(bug.name, nrow(results)))
+  #test.complete <- cbind(bacteria, results)
   
-  overall.results <- list(anova.res, test.complete)
+  overall.results <- list(anova.res, results)
   names(overall.results) <- c("lmr.output", "pairwise.emmeans.output")
   
   return(overall.results)
@@ -199,35 +205,92 @@ lmr.emeans <- function(row, metadata, independent.variable="Condition", sample.v
 ##############################################################
 #### Execute on multiple rows in a counts table ##############
 
-run.lmer.emeans <- function(normalised.counts, metadata, independent.variable="Condition", sample.variable="SampleID", time.variable="Day", emeans.factor="independent.variable", emeans.by.factor="time"){
+run.lmer.emeans <- function(normalised.counts, metadata, independent.variable="Condition", sample.variable="SampleID", time.variable="Day", emeans.factor="independent.variable", emeans.by.factor="time", baseline.comparison = NULL){
   
   anova.results <- list()
   pairwise.results <- list()
   
   for (i in 1:nrow(normalised.counts)){
-    result <- lmr.emeans(normalised.counts[i,], metadata, independent.variable, sample.variable, time.variable, emeans.factor, emeans.by.factor)
+    result <- lmr.emeans(normalised.counts[i,], metadata, independent.variable, sample.variable, time.variable, emeans.factor, emeans.by.factor, baseline.comparison)
     anova.results[[i]] <- as.data.frame(result$lmr.output)
     pairwise.results[[i]] <- as.data.frame(result$pairwise.emmeans.output)
   }
   
   anova.results <- bind_rows(anova.results)
   rownames(anova.results) <- rownames(normalised.counts)
-  anova.results[,4] <- p.adjust(anova.results[,1], method = "BH")
-  anova.results[,5] <- p.adjust(anova.results[,2], method = "BH")
-  anova.results[,6] <- p.adjust(anova.results[,3], method = "BH")
-  colnames(anova.results)[4:6] <- c(paste0(independent.variable, ".padj"), paste0(time.variable, ".padj"), paste0(independent.variable, "*" ,time.variable, ".padj"))
+  anova.results[,7] <- p.adjust(anova.results[,1], method = "BH")
+  anova.results[,8] <- p.adjust(anova.results[,2], method = "BH")
+  anova.results[,9] <- p.adjust(anova.results[,3], method = "BH")
+  colnames(anova.results)[7:9] <- c(paste0(independent.variable, ".padj"), paste0(time.variable, ".padj"), paste0(independent.variable, "*" ,time.variable, ".padj"))
   
   
   pairwise.results <- bind_rows(pairwise.results)
   
-  ## P value adjusted in Tukey method - not sure if BH required on top of this
-  pairwise.results$padj <- p.adjust(pairwise.results$p.value, method = "BH")
-  pairwise.results$p.star <- stars.pval(pairwise.results$padj)
+  ## P value is adjusted now
+  #pairwise.results$padj <- p.adjust(pairwise.results$p.value, method = "BH")
+  #pairwise.results$p.star <- stars.pval(pairwise.results$padj)
   
   
   all.res <- list(anova.results, pairwise.results)
   names(all.res) <- c("lmr.aov.out", "emmeans.out")
   return(all.res) }
+
+
+########################################################
+### LMR on end-point data e.g. contents! third.variable can be content location
+### NB metadata must have rownames matching counts colnames
+
+EP.lmr <- function(row, metadata, independent.variable="Condition", sample.variable="SampleID", third.variable= NULL){
+  
+  bug.name <- rownames(row)
+  bug.df <- data.frame(Sample=names(row), Rel_Abun=unlist(row))
+  
+  metadata <- metadata[match(bug.df$Sample, rownames(metadata)), ]
+ 
+  bug.df$independent.variable <- metadata[,independent.variable]
+  bug.df$sample <- metadata[,sample.variable]
+  if(!is.null(third.variable)){bug.df$third.variable <- metadata[,third.variable]}
+
+  ## lmr Model
+  lmr.res <- lmer(Rel_Abun ~ independent.variable  + (1 | sample), data = bug.df)
+  if(!is.null(third.variable)){lmr.res <- lmer(Rel_Abun ~ independent.variable * third.variable  + (1 | sample), data = bug.df)}
+  
+  # Anova on lmr
+  summary <- anova(lmr.res)
+  anova.res <- t(data.frame(summary$P))
+  colnames(anova.res) <- rownames(summary)
+  anova.res2 <- t(data.frame(summary$F))
+  colnames(anova.res2) <- rownames(summary) 
+  anova.res <- cbind(anova.res, anova.res2)
+  colnames(anova.res) <- c(paste0("P_", rownames(summary)[1]), paste0("P_", rownames(summary)[2]), paste0("P_", rownames(summary)[3]), paste0("F_", rownames(summary)[1]), paste0("F_", rownames(summary)[2]), paste0("F_", rownames(summary)[3]))
+  rownames(anova.res) <- bug.name
+  anova.res <- as.data.frame(anova.res)
+  
+  return(anova.res)
+  
+}
+
+##############################################################
+#### End-point lmer testing ##############
+
+run.lmer.EP <- function(normalised.counts, metadata, independent.variable="Condition", sample.variable="SampleID", third.variable=NULL){
+  
+  anova.results <- list()
+  
+  for (i in 1:nrow(normalised.counts)){
+    result <- EP.lmr(normalised.counts[i,], metadata, independent.variable, sample.variable, third.variable)
+    anova.results[[i]] <- as.data.frame(result)
+  }
+  
+  anova.results <- bind_rows(anova.results)
+  rownames(anova.results) <- rownames(normalised.counts)
+  anova.results[,7] <- p.adjust(anova.results[,1], method = "BH")
+  anova.results[,8] <- p.adjust(anova.results[,2], method = "BH")
+  anova.results[,9] <- p.adjust(anova.results[,3], method = "BH")
+  names(anova.results)[7:9] <- c(paste0(names(anova.results)[1], "_padj"), paste0(names(anova.results)[2], "_padj"), paste0(names(anova.results)[3], "_padj"))
+  
+  return(anova.results) }
+
 
 ###############################################################
 ###############################################################
@@ -242,14 +305,17 @@ dunn <- function(row, metadata, independent.variable, adj){
   iv <- unlist(metadata[,independent.variable])
   
   kw.result <- kruskal.test(unlist(row) ~ as.factor(iv))
-  posthoc <- dunn.test(unlist(row), as.factor(iv), method = adj, list = TRUE)
-  posthoc.res <- data.frame(t(data.frame(posthoc$P.adjusted)))
-  names(posthoc.res) <- posthoc$comparisons
-    
-    all.res = data.frame(test.id = asv)
-    all.res$kw.p.value <- kw.result$p.value
-    all.res <- cbind(all.res, posthoc.res)
-    return(all.res)
+  kw.out <- data.frame("Bug" = asv, "P_value" = kw.result$p.value, "Chi_squared" = kw.result$statistic)
+  
+  posthoc <- data.frame(dunn.test(unlist(row), as.factor(iv), method = adj, list = TRUE))
+  posthoc$Bug <- rep(asv, nrow(posthoc))  
+  
+  overall.results <- list(kw.out, posthoc)
+  names(overall.results) <- c("kw.output", "dunn.posthoc.output")
+    #all.res = data.frame(test.id = asv)
+    #all.res$kw.p.value <- kw.result$p.value
+    #all.res <- cbind(all.res, posthoc.res)
+    return(overall.results)
     }
   
   
@@ -260,26 +326,39 @@ dunn <- function(row, metadata, independent.variable, adj){
 
 run.dunn <- function(mat, metadata, independent.variable, adj){
   
+  kw.results <- list()
   dunn.results <- list()
+  
   for (i in 1:nrow(mat)){
     result <- dunn(mat[i,], metadata, independent.variable, adj)
-    dunn.results[[i]] <- as.data.frame(result)
+    
+    kw.results[[i]] <- as.data.frame(result$kw.output)
+    dunn.results[[i]] <- as.data.frame(result$dunn.posthoc.output)
   }
+  
+  kw.results <- bind_rows(kw.results)
+  kw.results$padj <- p.adjust(kw.results$P_value, method = "BH")
+  kw.results$padj.star <- stars.pval(kw.results$padj)
   
   dunn.results <- bind_rows(dunn.results)
+  dunn.results$padj.star <- stars.pval(dunn.results$P.adjusted)
   
-  ## now correct for multiple testing on multiple bacteria
-  new.p = list()
-  for(i in 2:ncol(dunn.results)){
-    new.p[[i]] <- as.data.frame(p.adjust(dunn.results[,i], method = "BH"))
+  all.res <- list(kw.results, dunn.results)
+  names(all.res) <- c("kw.out", "dunn.out")
+  return(all.res)
+  
+  
+  ## now correct for multiple testing on multiple bacteria - dont think need to do this as each thing is adjusted??
+  #new.p = list()
+  #for(i in 2:ncol(dunn.results)){
+  #  new.p[[i]] <- as.data.frame(p.adjust(dunn.results[,i], method = "BH"))
     
-  }
+  #}
   
-  new.res <- bind_cols(new.p)
-  final.res <- cbind(dunn.results[,1], new.res)
-  names(final.res) <- names(dunn.results)
+  #new.res <- bind_cols(new.p)
+  #final.res <- cbind(dunn.results[,1], new.res)
+  #names(final.res) <- names(dunn.results)
   
-  return(final.res)
 }
 
 ################################################

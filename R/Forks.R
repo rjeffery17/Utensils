@@ -1,5 +1,5 @@
 library(data.table)
-library(DESeq2)
+#library(DESeq2)
 
 #######################################
 #######################################
@@ -203,6 +203,26 @@ fancy_scientific <- function(l) {
   l <- gsub("e", "%*%10^", l)
   # return this as an expression
   parse(text=l)
+}
+
+
+##############################
+### Get a summary of data - mean and SD
+
+data.summary <- function(data, independent.variable, condition.list){
+  data$mean <- rep(NA, nrow(data))
+  data$sd <- rep(NA, nrow(data))
+  
+  
+  for(i in 1:length(condition.list)){
+    Group.data <- data[data$Condition == condition.list[i], independent.variable]
+    
+    data$sd[data$Condition == condition.list[i]] <- sd(Group.data)
+    data$mean[data$Condition == condition.list[i]] <- mean(Group.data)
+  }
+  
+  
+  return(data)
 }
 
 
